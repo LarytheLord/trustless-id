@@ -1,36 +1,135 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TrustlessID - Decentralized Digital Identity Platform
 
-## Getting Started
+A software-only platform that allows users to create, own, and verify digital identities using AI-based document validation, anomaly detection, and blockchain-backed credentials.
 
-First, run the development server:
+![TrustlessID](https://img.shields.io/badge/TrustlessID-Hackathon%20Demo-blue)
+![Next.js](https://img.shields.io/badge/Next.js-14-black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
+![Tailwind](https://img.shields.io/badge/Tailwind-CSS-cyan)
+
+## 🚀 Quick Start
 
 ```bash
+# Install dependencies
+npm install
+
+# Start development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# Open http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 📋 Features
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Core Platform
+- **AI Document Verification** - Simulated document authenticity analysis
+- **Fraud Detection** - Synthetic identity and deepfake pattern detection (mock)
+- **Blockchain Credentials** - SHA-256 hashed, tamper-proof credential issuance
+- **Zero Data Exposure** - Privacy-preserving public verification
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Pages
+| Page | Route | Description |
+|------|-------|-------------|
+| Landing | `/` | Hero, problem statement, features, tech stack |
+| Login | `/login` | Email-based mock authentication |
+| Dashboard | `/dashboard` | User profile, documents, credentials, activity |
+| Create Identity | `/create-identity` | 5-step identity creation wizard |
+| Verify | `/verify` | Public credential verification |
 
-## Learn More
+## 🏗️ Tech Stack
 
-To learn more about Next.js, take a look at the following resources:
+- **Frontend**: Next.js 14 (App Router) + TypeScript
+- **Styling**: Tailwind CSS + shadcn/ui
+- **Auth**: Mock email-based (no external provider)
+- **Backend**: Next.js API Routes
+- **Database**: In-memory mock data
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 📁 Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+trustless-id/
+├── src/
+│   ├── app/                    # Next.js App Router pages
+│   │   ├── api/               # API routes
+│   │   │   ├── auth/          # Authentication
+│   │   │   ├── ai/            # AI verification endpoints
+│   │   │   ├── documents/     # Document management
+│   │   │   ├── credentials/   # Credential issuance
+│   │   │   └── verify/        # Public verification
+│   │   ├── login/             # Auth page
+│   │   ├── dashboard/         # User dashboard
+│   │   ├── create-identity/   # Identity wizard
+│   │   └── verify/            # Public verification
+│   ├── components/
+│   │   ├── ui/                # shadcn/ui components
+│   │   ├── landing/           # Landing page sections
+│   │   └── shared/            # Navbar, Footer, Logo
+│   ├── lib/
+│   │   ├── auth.tsx           # Auth context & hooks
+│   │   ├── crypto.ts          # SHA-256 hashing
+│   │   ├── mock-data.ts       # Sample data
+│   │   └── utils.ts           # Utilities
+│   └── types/                 # TypeScript definitions
+└── public/                    # Static assets
+```
 
-## Deploy on Vercel
+## 🎮 Demo Flow
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 1. Landing Page
+Visit `http://localhost:3000` to see the product overview.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 2. Create Account
+- Click "Get Started" or go to `/login`
+- Enter any email (demo mode accepts all)
+- Use `demo@trustlessid.com` for a pre-populated account
+
+### 3. Create Identity
+- Go to `/create-identity`
+- Complete the 5-step wizard:
+  1. Basic Details
+  2. Document Upload (simulated)
+  3. AI Verification (mock processing)
+  4. Fraud Analysis
+  5. Credential Confirmation
+
+### 4. Verify Credential
+- Go to `/verify`
+- Try these demo credential IDs:
+  - `cred_a1b2c3d4e5f6`
+  - `cred_g7h8i9j0k1l2`
+  - `cred_m3n4o5p6q7r8`
+
+## 🔌 API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/login` | POST | Mock authentication |
+| `/api/documents` | GET/POST | Document management |
+| `/api/credentials` | GET/POST | Credential issuance |
+| `/api/verify` | GET | Public verification |
+| `/api/ai/analyze` | POST | Document analysis (mock) |
+| `/api/ai/fraud-detection` | POST | Fraud scoring (mock) |
+
+## ⚠️ Demo Limitations
+
+This is a **hackathon demo** with the following simulations:
+
+- **AI Services**: Document analysis and fraud detection return mock results
+- **Blockchain**: Credential hashes are generated but not stored on-chain
+- **Authentication**: No real password validation
+- **File Upload**: Files are not actually stored
+
+## 🎨 Design System
+
+- **Colors**: Deep navy background with electric blue/cyan accents
+- **Effects**: Glassmorphism, gradient backgrounds, glow effects
+- **Typography**: Inter font family
+- **Animations**: Fade-in, float, shimmer effects
+
+## 📝 Environment Variables
+
+No environment variables required for demo mode.
+
+## 📄 License
+
+Built for hackathon demonstration purposes.
