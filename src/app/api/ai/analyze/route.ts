@@ -1,59 +1,54 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { createVerificationResult, updateDocumentStatus, createActivityLog } from '@/lib/db';
 import { generateMockVerification } from '@/lib/mock-data';
-import { VerificationResult } from '@/types';
 
-/**
- * AI Document Analysis API (Mock)
- * POST /api/ai/analyze
- * 
- * Simulates AI-powered document verification
- * Returns authenticity score, confidence level, and extracted data
- */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
         const { documentId, documentType } = body;
 
         if (!documentId) {
             return NextResponse.json(
-                { success: false, error: 'Document ID is required' },
+                { success: false, error: 'documentId is required' },
                 { status: 400 }
             );
         }
 
-        // Simulate AI processing time (1-3 seconds)
-        const processingTime = 1000 + Math.random() * 2000;
-        await new Promise((resolve) => setTimeout(resolve, processingTime));
+        // Simulate AI processing delay
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
-        // Generate mock verification result
-        const result: VerificationResult = generateMockVerification();
-        result.documentId = documentId;
+        // Generate mock verification result (replace with real AI API later)
+        const verificationData = generateMockVerification();
+        verificationData.documentId = documentId;
 
-        // Customize extracted data based on document type
-        if (documentType === 'passport') {
-            result.extractedData = {
-                ...result.extractedData,
-                documentNumber: `P${Math.random().toString().substring(2, 10)}`,
-                issuingCountry: 'United States',
-            };
-        } else if (documentType === 'drivers_license') {
-            result.extractedData = {
-                ...result.extractedData,
-                documentNumber: `DL${Math.random().toString().substring(2, 10)}`,
-                address: '123 Demo Street, Tech City, TC 12345',
-            };
-        }
+        // Save to database
+        await createVerificationResult({
+            document_id: documentId,
+            authenticity: verificationData.authenticity,
+            confidence: verificationData.confidence,
+            anomalies: verificationData.anomalies,
+            extracted_data: verificationData.extractedData as Record<string, unknown>,
+        });
+
+        // Update document status
+        await updateDocumentStatus(documentId, 'verified');
+
+        // Log activity
+        await createActivityLog({
+            user_id: 'unknown', // Will be set from context in real implementation
+            action: 'verification',
+            description: `Document ${documentId} verified with ${verificationData.authenticity}% authenticity`,
+            metadata: { documentId, authenticity: verificationData.authenticity },
+        });
 
         return NextResponse.json({
             success: true,
-            data: result,
-            processingTimeMs: Math.round(processingTime),
-            message: 'Document analysis complete',
+            data: verificationData,
         });
     } catch (error) {
         console.error('AI analysis error:', error);
         return NextResponse.json(
-            { success: false, error: 'Document analysis failed' },
+            { success: false, error: 'AI analysis failed' },
             { status: 500 }
         );
     }
