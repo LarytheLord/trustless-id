@@ -1,76 +1,74 @@
-import { NextResponse } from 'next/server';
-import { getCredentialById, mockCredentials } from '@/lib/mock-data';
-import { PublicVerification } from '@/types';
+import { NextRequest, NextResponse } from 'next/server';
+import { getCredentialById, incrementCredentialVerificationCount } from '@/lib/db';
 
-/**
- * Public Credential Verification API
- * GET /api/verify?id=<credential_id>
- * 
- * Returns verification result without exposing personal data
- */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
     try {
-        const { searchParams } = new URL(request.url);
-        const credentialId = searchParams.get('id');
+        const searchParams = request.nextUrl.searchParams;
+        const id = searchParams.get('id');
 
-        if (!credentialId) {
+        if (!id) {
             return NextResponse.json(
                 { success: false, error: 'Credential ID is required' },
                 { status: 400 }
             );
         }
 
-        // Simulate verification delay
-        await new Promise((resolve) => setTimeout(resolve, 800));
-
-        // Look up credential
-        const credential = getCredentialById(credentialId);
+        const credential = await getCredentialById(id);
 
         if (!credential) {
-            return NextResponse.json({
-                success: false,
-                error: 'Credential not found',
-                verified: false,
-            });
+            return NextResponse.json(
+                { success: false, error: 'Credential not found' },
+                { status: 404 }
+            );
         }
 
-        // Check if credential is valid
-        const now = new Date();
-        const expiryDate = new Date(credential.expiresAt);
-        const isExpired = now > expiryDate;
-        const isRevoked = credential.status === 'revoked';
-        const isValid = !isExpired && !isRevoked && credential.status === 'active';
+        // Calculate trust score
+        const trustScore = calculateTrustScore(credential);
 
-        // Calculate trust score based on verification count and status
-        const baseScore = isValid ? 85 : 0;
-        const verificationBonus = Math.min(credential.verificationCount * 2, 15);
-        const trustScore = isValid ? baseScore + verificationBonus : 0;
-
-        const result: PublicVerification = {
-            credentialId: credential.id,
-            isValid,
-            trustScore,
-            issueDate: credential.issuedAt,
-            credentialType: credential.type,
-            verifiedAt: new Date().toISOString(),
-        };
-
-        // Increment verification count (in real app, this would update database)
-        const credIndex = mockCredentials.findIndex((c) => c.id === credentialId);
-        if (credIndex !== -1) {
-            mockCredentials[credIndex].verificationCount += 1;
-        }
+        // Increment verification count
+        await incrementCredentialVerificationCount(id);
 
         return NextResponse.json({
             success: true,
-            data: result,
-            message: isValid ? 'Credential verified successfully' : 'Credential is not valid',
+            data: {
+                credentialId: credential.id,
+                isValid: credential.status === 'active',
+                trustScore,
+                issueDate: credential.issued_at,
+                credentialType: credential.type,
+                verifiedAt: new Date().toISOString(),
+            },
         });
     } catch (error) {
-        console.error('Verification error:', error);
+        console.error('Error verifying credential:', error);
         return NextResponse.json(
-            { success: false, error: 'Verification failed' },
+            { success: false, error: 'Failed to verify credential' },
             { status: 500 }
         );
     }
+}
+
+function calculateTrustScore(credential: {
+    status: string;
+    verification_count: number;
+    issued_at: string;
+}): number {
+    // Base score: 70
+    let score = 70;
+
+    // Add points for verification count (max 10)
+    score += Math.min(credential.verification_count, 10);
+
+    // Add points for age (max 20)
+    const daysSinceIssuance = Math.floor(
+        (Date.now() - new Date(credential.issued_at).getTime()) / (1000 * 60 * 60 * 24)
+    );
+    score += Math.min(daysSinceIssuance, 20);
+
+    // Deduct if expired
+    if (credential.status === 'expired') {
+        score = Math.max(0, score - 50);
+    }
+
+    return Math.min(100, Math.max(0, score));
 }

@@ -1,34 +1,35 @@
-import { NextResponse } from 'next/server';
-import { getDocumentsByUserId, mockDocuments } from '@/lib/mock-data';
-import { Document } from '@/types';
+import { NextRequest, NextResponse } from 'next/server';
+import { getDocumentsByUserId, createDocument, createActivityLog } from '@/lib/db';
 
-/**
- * Documents API
- * GET /api/documents?userId=<user_id> - List user documents
- * POST /api/documents - Upload new document (mock)
- */
-
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
     try {
-        const { searchParams } = new URL(request.url);
+        const searchParams = request.nextUrl.searchParams;
         const userId = searchParams.get('userId');
 
         if (!userId) {
             return NextResponse.json(
-                { success: false, error: 'User ID is required' },
+                { success: false, error: 'userId is required' },
                 { status: 400 }
             );
         }
 
-        const documents = getDocumentsByUserId(userId);
+        const documents = await getDocumentsByUserId(userId);
 
         return NextResponse.json({
             success: true,
-            data: documents,
-            count: documents.length,
+            data: documents.map(doc => ({
+                id: doc.id,
+                userId: doc.user_id,
+                name: doc.name,
+                type: doc.type,
+                status: doc.status,
+                uploadedAt: doc.uploaded_at,
+                fileSize: doc.file_size,
+                mimeType: doc.mime_type,
+            })),
         });
     } catch (error) {
-        console.error('Documents fetch error:', error);
+        console.error('Error fetching documents:', error);
         return NextResponse.json(
             { success: false, error: 'Failed to fetch documents' },
             { status: 500 }
@@ -36,45 +37,53 @@ export async function GET(request: Request) {
     }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { userId, name, type, fileSize, mimeType } = body;
+        const { userId, name, type, fileSize, mimeType, cloudinaryUrl, cloudinaryPublicId } = body;
 
         if (!userId || !name || !type) {
             return NextResponse.json(
-                { success: false, error: 'Missing required fields' },
+                { success: false, error: 'userId, name, and type are required' },
                 { status: 400 }
             );
         }
 
-        // Simulate upload processing
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        // Create new document entry
-        const newDocument: Document = {
-            id: `doc_${Date.now()}`,
-            userId,
+        const document = await createDocument({
+            user_id: userId,
             name,
             type,
-            status: 'pending',
-            uploadedAt: new Date().toISOString(),
-            fileSize: fileSize || 0,
-            mimeType: mimeType || 'application/octet-stream',
-        };
+            file_size: fileSize,
+            mime_type: mimeType,
+            cloudinary_url: cloudinaryUrl,
+            cloudinary_public_id: cloudinaryPublicId,
+        });
 
-        // Add to mock database
-        mockDocuments.push(newDocument);
+        // Log activity
+        await createActivityLog({
+            user_id: userId,
+            action: 'document_upload',
+            description: `Uploaded ${name} for ${type.replace('_', ' ')}`,
+            metadata: { documentId: document.id },
+        });
 
         return NextResponse.json({
             success: true,
-            data: newDocument,
-            message: 'Document uploaded successfully',
+            data: {
+                id: document.id,
+                userId: document.user_id,
+                name: document.name,
+                type: document.type,
+                status: document.status,
+                uploadedAt: document.uploaded_at,
+                fileSize: document.file_size,
+                mimeType: document.mime_type,
+            },
         });
     } catch (error) {
-        console.error('Document upload error:', error);
+        console.error('Error creating document:', error);
         return NextResponse.json(
-            { success: false, error: 'Failed to upload document' },
+            { success: false, error: 'Failed to create document' },
             { status: 500 }
         );
     }

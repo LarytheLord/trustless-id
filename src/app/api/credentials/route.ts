@@ -1,35 +1,36 @@
-import { NextResponse } from 'next/server';
-import { mockCredentials } from '@/lib/mock-data';
+import { NextRequest, NextResponse } from 'next/server';
+import { getCredentialsByUserId, getCredentialById, createCredential, createActivityLog } from '@/lib/db';
 import { generateCredentialId, generateCredentialHash } from '@/lib/crypto';
-import { Credential } from '@/types';
 
-/**
- * Credentials API
- * GET /api/credentials?userId=<user_id> - List user credentials
- * POST /api/credentials - Issue new credential
- */
-
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
     try {
-        const { searchParams } = new URL(request.url);
+        const searchParams = request.nextUrl.searchParams;
         const userId = searchParams.get('userId');
 
         if (!userId) {
             return NextResponse.json(
-                { success: false, error: 'User ID is required' },
+                { success: false, error: 'userId is required' },
                 { status: 400 }
             );
         }
 
-        const credentials = mockCredentials.filter((c) => c.userId === userId);
+        const credentials = await getCredentialsByUserId(userId);
 
         return NextResponse.json({
             success: true,
-            data: credentials,
-            count: credentials.length,
+            data: credentials.map(cred => ({
+                id: cred.id,
+                userId: cred.user_id,
+                hash: cred.hash,
+                type: cred.type,
+                issuedAt: cred.issued_at,
+                expiresAt: cred.expires_at,
+                status: cred.status,
+                verificationCount: cred.verification_count,
+            })),
         });
     } catch (error) {
-        console.error('Credentials fetch error:', error);
+        console.error('Error fetching credentials:', error);
         return NextResponse.json(
             { success: false, error: 'Failed to fetch credentials' },
             { status: 500 }
@@ -37,57 +38,63 @@ export async function GET(request: Request) {
     }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
         const { userId, documentId, type } = body;
 
-        if (!userId || !documentId || !type) {
+        if (!userId || !type) {
             return NextResponse.json(
-                { success: false, error: 'Missing required fields' },
+                { success: false, error: 'userId and type are required' },
                 { status: 400 }
             );
         }
 
-        // Simulate blockchain transaction delay
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-
-        // Generate credential
+        // Generate credential ID and hash
         const credentialId = generateCredentialId();
-        const timestamp = new Date().toISOString();
         const hash = await generateCredentialHash({
             userId,
-            documentId,
-            timestamp,
+            documentId: documentId || 'none',
+            timestamp: new Date().toISOString(),
         });
 
-        // Create credential entry
-        const expiryDate = new Date();
-        expiryDate.setFullYear(expiryDate.getFullYear() + 1);
+        // Calculate expiry (1 year from now)
+        const expiresAt = new Date();
+        expiresAt.setFullYear(expiresAt.getFullYear() + 1);
 
-        const newCredential: Credential = {
-            id: credentialId,
-            userId,
+        const credential = await createCredential({
+            user_id: userId,
+            document_id: documentId,
             hash,
-            type,
-            issuedAt: timestamp,
-            expiresAt: expiryDate.toISOString(),
-            status: 'active',
-            verificationCount: 0,
-        };
+            type: type as 'identity' | 'address' | 'age',
+            expires_at: expiresAt.toISOString(),
+        });
 
-        // Add to mock database
-        mockCredentials.push(newCredential);
+        // Log activity
+        await createActivityLog({
+            user_id: userId,
+            action: 'credential_issued',
+            description: `${type.charAt(0).toUpperCase() + type.slice(1)} credential issued`,
+            metadata: { credentialId: credential.id },
+        });
 
         return NextResponse.json({
             success: true,
-            data: newCredential,
-            message: 'Credential issued and recorded on blockchain (simulated)',
+            data: {
+                id: credentialId,
+                userId: credential.user_id,
+                hash: credential.hash,
+                type: credential.type,
+                issuedAt: credential.issued_at,
+                expiresAt: credential.expires_at,
+                status: credential.status,
+                verificationCount: credential.verification_count,
+            },
         });
     } catch (error) {
-        console.error('Credential issue error:', error);
+        console.error('Error creating credential:', error);
         return NextResponse.json(
-            { success: false, error: 'Failed to issue credential' },
+            { success: false, error: 'Failed to create credential' },
             { status: 500 }
         );
     }

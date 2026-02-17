@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,12 +13,12 @@ import { useAuth } from '@/lib/auth';
 
 function LoginForm() {
     const router = useRouter();
-    const searchParams = useSearchParams();
     const { login, isLoading, isAuthenticated } = useAuth();
 
     const [email, setEmail] = useState('');
+    const [name, setName] = useState('');
     const [error, setError] = useState('');
-    const [activeTab, setActiveTab] = useState(searchParams.get('mode') === 'signup' ? 'signup' : 'login');
+    const [activeTab, setActiveTab] = useState('login');
 
     // Redirect if already authenticated
     useEffect(() => {
@@ -36,11 +36,11 @@ function LoginForm() {
             return;
         }
 
-        const success = await login(email);
+        const success = await login(email, activeTab === 'signup' ? name : undefined);
         if (success) {
             router.push('/dashboard');
         } else {
-            setError('Login failed. Please try again.');
+            setError('Authentication failed. Please try again.');
         }
     };
 
@@ -81,21 +81,8 @@ function LoginForm() {
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
                                         className="bg-background/50"
+                                        autoComplete="email"
                                     />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="password-login">Password</Label>
-                                    <Input
-                                        id="password-login"
-                                        type="password"
-                                        placeholder="••••••••"
-                                        defaultValue="demo123"
-                                        className="bg-background/50"
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                        Demo mode: any password works
-                                    </p>
                                 </div>
 
                                 {error && (
@@ -122,6 +109,19 @@ function LoginForm() {
                         <TabsContent value="signup">
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 <div className="space-y-2">
+                                    <Label htmlFor="name-signup">Full Name</Label>
+                                    <Input
+                                        id="name-signup"
+                                        type="text"
+                                        placeholder="John Doe"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        className="bg-background/50"
+                                        autoComplete="name"
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
                                     <Label htmlFor="email-signup">Email</Label>
                                     <Input
                                         id="email-signup"
@@ -130,32 +130,8 @@ function LoginForm() {
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
                                         className="bg-background/50"
+                                        autoComplete="email"
                                     />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="password-signup">Password</Label>
-                                    <Input
-                                        id="password-signup"
-                                        type="password"
-                                        placeholder="Create a password"
-                                        defaultValue="demo123"
-                                        className="bg-background/50"
-                                    />
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="password-confirm">Confirm Password</Label>
-                                    <Input
-                                        id="password-confirm"
-                                        type="password"
-                                        placeholder="Confirm password"
-                                        defaultValue="demo123"
-                                        className="bg-background/50"
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                        Demo mode: accounts are created instantly
-                                    </p>
                                 </div>
 
                                 {error && (

@@ -15,8 +15,8 @@ import { Document, Credential, ActivityLog, DashboardStats } from '@/types';
 import {
     getDocumentsByUserId,
     getCredentialsByUserId,
-    getActivityLogsByUserId
-} from '@/lib/mock-data';
+    getActivityLogsByUserId,
+} from '@/lib/db';
 
 export default function DashboardPage() {
     const router = useRouter();
@@ -41,22 +41,25 @@ export default function DashboardPage() {
 
     // Load user data
     useEffect(() => {
-        if (user) {
-            const userDocs = getDocumentsByUserId(user.id);
-            const userCreds = getCredentialsByUserId(user.id);
-            const userLogs = getActivityLogsByUserId(user.id);
+        async function loadData() {
+            if (user) {
+                const userDocs = await getDocumentsByUserId(user.id);
+                const userCreds = await getCredentialsByUserId(user.id);
+                const userLogs = await getActivityLogsByUserId(user.id);
 
-            setDocuments(userDocs);
-            setCredentials(userCreds);
-            setActivities(userLogs.slice(0, 5));
+                setDocuments(userDocs);
+                setCredentials(userCreds);
+                setActivities(userLogs.slice(0, 5));
 
-            setStats({
-                totalDocuments: userDocs.length,
-                verifiedDocuments: userDocs.filter(d => d.status === 'verified').length,
-                activeCredentials: userCreds.filter(c => c.status === 'active').length,
-                recentVerifications: userCreds.reduce((acc, c) => acc + c.verificationCount, 0),
-            });
+                setStats({
+                    totalDocuments: userDocs.length,
+                    verifiedDocuments: userDocs.filter(d => d.status === 'verified').length,
+                    activeCredentials: userCreds.filter(c => c.status === 'active').length,
+                    recentVerifications: userCreds.reduce((acc, c) => acc + (c.verificationCount || 0), 0),
+                });
+            }
         }
+        loadData();
     }, [user]);
 
     if (isLoading) {

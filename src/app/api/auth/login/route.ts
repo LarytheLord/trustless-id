@@ -1,56 +1,57 @@
-import { NextResponse } from 'next/server';
-import { mockUsers, getUserByEmail } from '@/lib/mock-data';
-import { User } from '@/types';
+import { NextRequest, NextResponse } from 'next/server';
+import { createUser, getUserByEmail } from '@/lib/db';
+import { signJWT } from '@/lib/jwt';
 
-/**
- * Mock Authentication API
- * POST /api/auth/login
- * 
- * For demo purposes: any email will work
- * - Known emails return existing user data
- * - Unknown emails create a new mock user
- */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     try {
-        const body = await request.json();
-        const { email } = body;
+        const { email, name } = await request.json();
 
-        if (!email || typeof email !== 'string') {
+        if (!email || !email.includes('@')) {
             return NextResponse.json(
-                { success: false, error: 'Email is required' },
+                { success: false, error: 'Valid email is required' },
                 { status: 400 }
             );
         }
 
-        // Simulate network delay for realism
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // Check if user exists
+        let user = await getUserByEmail(email);
 
-        // Check if user exists in mock database
-        let user = getUserByEmail(email);
-
-        // For demo: create a new user if doesn't exist
         if (!user) {
-            const newUser: User = {
-                id: `user_${Date.now()}`,
-                email: email.toLowerCase(),
-                name: email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-                createdAt: new Date().toISOString(),
-                verified: false,
-            };
-
-            // In a real app, this would save to database
-            // For demo, we just return the new user
-            user = newUser;
-            mockUsers.push(newUser);
+            // Create new user
+            user = await createUser(email, name || email.split('@')[0]);
         }
 
-        return NextResponse.json({
-            success: true,
-            user,
-            message: 'Login successful',
+        // Generate JWT token
+        const token = await signJWT({
+            userId: user.id,
+            email: user.email,
         });
+
+        // Create response with cookie
+        const response = NextResponse.json({
+            success: true,
+            user: {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                verified: user.verified,
+                createdAt: user.created_at,
+            },
+            message: user.created_at ? 'Account created' : 'Login successful',
+        });
+
+        // Set JWT cookie
+        response.cookies.set('auth_token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 60 * 60 * 24 * 7, // 7 days
+            path: '/',
+        });
+
+        return response;
     } catch (error) {
-        console.error('Login error:', error);
+        console.error('Auth error:', error);
         return NextResponse.json(
             { success: false, error: 'Authentication failed' },
             { status: 500 }

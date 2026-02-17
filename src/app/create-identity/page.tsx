@@ -13,6 +13,7 @@ import { Navbar, Footer } from '@/components/shared';
 import { useAuth } from '@/lib/auth';
 import { formatHash } from '@/lib/crypto';
 import { VerificationResult, FraudResult, Credential } from '@/types';
+import { toast } from 'sonner';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -41,6 +42,8 @@ export default function CreateIdentityPage() {
     const [fraudResult, setFraudResult] = useState<FraudResult | null>(null);
     const [credential, setCredential] = useState<Credential | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [documentId, setDocumentId] = useState<string | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
 
     // Redirect if not authenticated
     useEffect(() => {
@@ -60,8 +63,93 @@ export default function CreateIdentityPage() {
         }
     }, [user]);
 
+    const uploadFile = async (): Promise<{ url: string; publicId: string } | null> => {
+        if (!formData.documentFile) return null;
+
+        setIsUploading(true);
+        try {
+            const formDataObj = new FormData();
+            formDataObj.append('file', formData.documentFile);
+
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formDataObj,
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                return { url: data.data.url, publicId: data.data.publicId };
+            } else {
+                toast.error('File upload failed');
+                return null;
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+            toast.error('File upload failed');
+            return null;
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const createDocumentRecord = async (uploadResult?: { url: string; publicId: string } | null) => {
+        if (!user) return null;
+
+        try {
+            const response = await fetch('/api/documents', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: user.id,
+                    name: formData.documentFile?.name || `${formData.documentType}_scan.pdf`,
+                    type: formData.documentType,
+                    fileSize: formData.documentFile?.size || 0,
+                    mimeType: formData.documentFile?.type || 'application/pdf',
+                    cloudinaryUrl: uploadResult?.url,
+                    cloudinaryPublicId: uploadResult?.publicId,
+                }),
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                return data.data.id;
+            } else {
+                toast.error('Failed to create document record');
+                return null;
+            }
+        } catch (error) {
+            console.error('Document creation error:', error);
+            toast.error('Failed to create document record');
+            return null;
+        }
+    };
+
     const handleNext = async () => {
-        if (currentStep === 2) {
+        if (currentStep === 1) {
+            // Validate step 1
+            if (!formData.fullName || !formData.email || !formData.dateOfBirth || !formData.nationality) {
+                toast.error('Please fill in all fields');
+                return;
+            }
+            setCurrentStep(2);
+        } else if (currentStep === 2) {
+            // Validate step 2
+            if (!formData.documentFile) {
+                toast.error('Please upload a document');
+                return;
+            }
+
+            // Upload file and create document record
+            const uploadResult = await uploadFile();
+            const docId = await createDocumentRecord(uploadResult);
+
+            if (!docId) {
+                toast.error('Failed to upload document');
+                return;
+            }
+
+            setDocumentId(docId);
+
             // Start AI verification
             setCurrentStep(3);
             setIsProcessing(true);
@@ -71,16 +159,20 @@ export default function CreateIdentityPage() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        documentId: `doc_${Date.now()}`,
+                        documentId: docId,
                         documentType: formData.documentType,
                     }),
                 });
                 const data = await response.json();
                 if (data.success) {
                     setVerificationResult(data.data);
+                    toast.success('Document verified successfully');
+                } else {
+                    toast.error('AI verification failed');
                 }
             } catch (error) {
                 console.error('Verification error:', error);
+                toast.error('AI verification failed');
             }
 
             setIsProcessing(false);
@@ -93,7 +185,7 @@ export default function CreateIdentityPage() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        documentId: `doc_${Date.now()}`,
+                        documentId: docId,
                         userId: user?.id,
                         verificationData: verificationResult,
                     }),
@@ -101,9 +193,17 @@ export default function CreateIdentityPage() {
                 const data = await response.json();
                 if (data.success) {
                     setFraudResult(data.data);
+                    if (data.data.recommendation === 'approve') {
+                        toast.success('Fraud check passed');
+                    } else {
+                        toast.warning('Document flagged for review');
+                    }
+                } else {
+                    toast.error('Fraud detection failed');
                 }
             } catch (error) {
                 console.error('Fraud detection error:', error);
+                toast.error('Fraud detection failed');
             }
             setIsProcessing(false);
         } else if (currentStep === 4) {
@@ -117,16 +217,20 @@ export default function CreateIdentityPage() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         userId: user?.id,
-                        documentId: `doc_${Date.now()}`,
+                        documentId: documentId,
                         type: 'identity',
                     }),
                 });
                 const data = await response.json();
                 if (data.success) {
                     setCredential(data.data);
+                    toast.success('Credential issued successfully!');
+                } else {
+                    toast.error('Failed to issue credential');
                 }
             } catch (error) {
                 console.error('Credential issue error:', error);
+                toast.error('Failed to issue credential');
             }
             setIsProcessing(false);
         } else {
@@ -141,6 +245,19 @@ export default function CreateIdentityPage() {
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            // Validate file
+            const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'];
+            if (!allowedTypes.includes(file.type)) {
+                toast.error('Invalid file type. Please upload PDF, JPEG, or PNG');
+                return;
+            }
+
+            const maxSize = 10 * 1024 * 1024;
+            if (file.size > maxSize) {
+                toast.error('File size exceeds 10MB limit');
+                return;
+            }
+
             setFormData(prev => ({ ...prev, documentFile: file }));
         }
     };
@@ -283,6 +400,7 @@ export default function CreateIdentityPage() {
                                                 onChange={handleFileChange}
                                                 className="hidden"
                                                 id="document-upload"
+                                                disabled={isUploading}
                                             />
                                             <label htmlFor="document-upload" className="cursor-pointer">
                                                 {formData.documentFile ? (
@@ -311,7 +429,7 @@ export default function CreateIdentityPage() {
                                             </label>
                                         </div>
                                         <p className="text-xs text-muted-foreground">
-                                            Demo mode: file upload is simulated. No actual files are stored.
+                                            Maximum file size: 10MB. Accepted formats: PDF, JPEG, PNG
                                         </p>
                                     </div>
                                 </div>
@@ -418,33 +536,28 @@ export default function CreateIdentityPage() {
                                         <div className="space-y-4">
                                             <div className="w-16 h-16 mx-auto border-4 border-primary border-t-transparent rounded-full animate-spin" />
                                             <p className="font-medium">Issuing credential...</p>
-                                            <p className="text-sm text-muted-foreground">
-                                                Recording to blockchain (simulated)
-                                            </p>
                                         </div>
                                     ) : credential ? (
                                         <div className="space-y-6">
-                                            <div className="w-20 h-20 mx-auto rounded-full gradient-primary flex items-center justify-center">
-                                                <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <div className="w-16 h-16 mx-auto rounded-full bg-green-500/10 flex items-center justify-center">
+                                                <svg className="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                                 </svg>
                                             </div>
                                             <div>
-                                                <p className="font-bold text-2xl mb-2">Identity Created!</p>
-                                                <p className="text-muted-foreground">
-                                                    Your credential has been issued and recorded on the blockchain.
-                                                </p>
+                                                <p className="font-medium text-lg">Identity Created Successfully!</p>
+                                                <p className="text-muted-foreground">Your blockchain-backed credential has been issued</p>
                                             </div>
-                                            <div className="p-6 rounded-xl bg-background/50 border border-white/5 text-left space-y-4">
+                                            <div className="text-left p-6 rounded-xl bg-background/50 border border-white/5 space-y-4">
                                                 <div>
                                                     <p className="text-xs text-muted-foreground">Credential ID</p>
-                                                    <p className="font-mono text-lg text-primary">{credential.id}</p>
+                                                    <p className="font-mono text-sm mt-1">{credential.id}</p>
                                                 </div>
                                                 <div>
-                                                    <p className="text-xs text-muted-foreground">SHA-256 Hash</p>
-                                                    <p className="font-mono text-sm break-all">{credential.hash}</p>
+                                                    <p className="text-xs text-muted-foreground">Blockchain Hash</p>
+                                                    <p className="font-mono text-sm text-primary mt-1">{formatHash(credential.hash)}</p>
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-4">
+                                                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
                                                     <div>
                                                         <p className="text-xs text-muted-foreground">Issued</p>
                                                         <p className="text-sm">{new Date(credential.issuedAt).toLocaleDateString()}</p>
@@ -455,14 +568,14 @@ export default function CreateIdentityPage() {
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="flex gap-3 justify-center">
+                                            <div className="flex gap-3 justify-center pt-4">
                                                 <Link href="/dashboard">
-                                                    <Button className="gradient-primary text-white border-0">
-                                                        Go to Dashboard
+                                                    <Button variant="outline">
+                                                        View Dashboard
                                                     </Button>
                                                 </Link>
                                                 <Link href="/verify">
-                                                    <Button variant="outline">
+                                                    <Button className="gradient-primary text-white border-0">
                                                         Verify Credential
                                                     </Button>
                                                 </Link>
@@ -472,12 +585,12 @@ export default function CreateIdentityPage() {
                                 </div>
                             )}
 
-                            {/* Navigation */}
+                            {/* Navigation Buttons */}
                             {currentStep < 5 && !isProcessing && (
-                                <div className="flex justify-between mt-8 pt-6 border-t border-white/5">
+                                <div className="flex justify-between mt-6">
                                     <Button
-                                        variant="ghost"
                                         onClick={handleBack}
+                                        variant="outline"
                                         disabled={currentStep === 1}
                                     >
                                         Back
@@ -485,12 +598,18 @@ export default function CreateIdentityPage() {
                                     <Button
                                         onClick={handleNext}
                                         className="gradient-primary text-white border-0"
-                                        disabled={
-                                            (currentStep === 1 && !formData.fullName) ||
-                                            (currentStep === 2 && !formData.documentFile)
-                                        }
+                                        disabled={isUploading}
                                     >
-                                        {currentStep === 4 ? 'Issue Credential' : 'Continue'}
+                                        {isUploading ? (
+                                            <span className="flex items-center gap-2">
+                                                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                Uploading...
+                                            </span>
+                                        ) : currentStep === 4 ? (
+                                            'Issue Credential'
+                                        ) : (
+                                            'Continue'
+                                        )}
                                     </Button>
                                 </div>
                             )}

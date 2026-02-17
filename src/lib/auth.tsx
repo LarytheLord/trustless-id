@@ -10,7 +10,7 @@ interface AuthContextType {
     user: User | null;
     isLoading: boolean;
     isAuthenticated: boolean;
-    login: (email: string) => Promise<boolean>;
+    login: (email: string, name?: string) => Promise<boolean>;
     logout: () => void;
 }
 
@@ -48,19 +48,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         checkSession();
     }, []);
 
-    // Mock login function
-    const login = async (email: string): Promise<boolean> => {
+    // Login function
+    const login = async (email: string, name?: string): Promise<boolean> => {
         setIsLoading(true);
 
         try {
-            // Simulate API call delay
-            await new Promise((resolve) => setTimeout(resolve, 800));
-
-            // Call mock auth API
+            // Call auth API
             const response = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email }),
+                body: JSON.stringify({ email, name }),
             });
 
             const data = await response.json();
@@ -71,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 return true;
             }
 
+            console.error('Login failed:', data.error);
             return false;
         } catch (error) {
             console.error('Login failed:', error);
