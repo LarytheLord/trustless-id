@@ -168,6 +168,25 @@ export async function createCredential(credential: {
     return data;
 }
 
+export async function updateCredential(id: string, updates: {
+    ipfs_hash?: string;
+    blockchain_network?: string;
+    status?: string;
+    verification_count?: number;
+}) {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from('credentials')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) throw error;
+    revalidatePath('/dashboard');
+    return data;
+}
+
 export async function incrementCredentialVerificationCount(id: string) {
     const supabase = await createClient();
     const { data: rpcData, error } = await supabase

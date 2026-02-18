@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createUser, getUserByEmail } from '@/lib/db';
 import { signJWT } from '@/lib/jwt';
+import { loginSchema } from '@/lib/validators/auth';
 
 export async function POST(request: NextRequest) {
     try {
-        const { email, name } = await request.json();
+        const body = await request.json();
 
-        if (!email || !email.includes('@')) {
+        // Validate input with Zod
+        const parsed = loginSchema.safeParse(body);
+        if (!parsed.success) {
             return NextResponse.json(
-                { success: false, error: 'Valid email is required' },
+                { success: false, error: 'Invalid input: ' + parsed.error.message },
                 { status: 400 }
             );
         }
+
+        const { email, name } = parsed.data;
 
         // Check if user exists
         let user = await getUserByEmail(email);

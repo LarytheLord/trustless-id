@@ -557,6 +557,24 @@ export default function CreateIdentityPage() {
                                                     <p className="text-xs text-muted-foreground">Blockchain Hash</p>
                                                     <p className="font-mono text-sm text-primary mt-1">{formatHash(credential.hash)}</p>
                                                 </div>
+                                                {credential.ipfsHash && (
+                                                    <div>
+                                                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                                            </svg>
+                                                            Stored on IPFS
+                                                        </p>
+                                                        <a 
+                                                            href={`https://gateway.pinata.cloud/ipfs/${credential.ipfsHash}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="font-mono text-xs text-accent hover:underline flex items-center gap-1 mt-1"
+                                                        >
+                                                            🔗 {credential.ipfsHash}
+                                                        </a>
+                                                    </div>
+                                                )}
                                                 <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
                                                     <div>
                                                         <p className="text-xs text-muted-foreground">Issued</p>

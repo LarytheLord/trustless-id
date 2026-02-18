@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCredentialsByUserId, getCredentialById, createCredential, createActivityLog } from '@/lib/db';
 import { generateCredentialId, generateCredentialHash } from '@/lib/crypto';
+import { storeCredentialOnIPFS } from '@/lib/ipfs';
 
 export async function GET(request: NextRequest) {
     try {
@@ -27,6 +28,8 @@ export async function GET(request: NextRequest) {
                 expiresAt: cred.expires_at,
                 status: cred.status,
                 verificationCount: cred.verification_count,
+                ipfsHash: cred.ipfs_hash,
+                blockchainNetwork: cred.blockchain_network,
             })),
         });
     } catch (error) {
@@ -70,12 +73,34 @@ export async function POST(request: NextRequest) {
             expires_at: expiresAt.toISOString(),
         });
 
+        // 🌐 STORE ON IPFS - Decentralized storage
+        const ipfsResult = await storeCredentialOnIPFS({
+            credentialId: credential.id,
+            userId: credential.user_id,
+            hash: credential.hash,
+            type: credential.type,
+            issuedAt: credential.issued_at,
+            expiresAt: credential.expires_at,
+        });
+
+        // Update credential with IPFS hash if successful
+        if (ipfsResult.success) {
+            const { updateCredential } = await import('@/lib/db');
+            await updateCredential(credential.id, {
+                ipfs_hash: ipfsResult.ipfsHash,
+                blockchain_network: 'ipfs',
+            });
+        }
+
         // Log activity
         await createActivityLog({
             user_id: userId,
             action: 'credential_issued',
-            description: `${type.charAt(0).toUpperCase() + type.slice(1)} credential issued`,
-            metadata: { credentialId: credential.id },
+            description: `${type.charAt(0).toUpperCase() + type.slice(1)} credential issued and stored on IPFS`,
+            metadata: { 
+                credentialId: credential.id,
+                ipfsHash: ipfsResult.success ? ipfsResult.ipfsHash : null,
+            },
         });
 
         return NextResponse.json({
@@ -89,6 +114,8 @@ export async function POST(request: NextRequest) {
                 expiresAt: credential.expires_at,
                 status: credential.status,
                 verificationCount: credential.verification_count,
+                ipfsHash: ipfsResult.success ? ipfsResult.ipfsHash : undefined,
+                blockchainNetwork: 'ipfs',
             },
         });
     } catch (error) {
