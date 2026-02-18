@@ -83,8 +83,6 @@ export async function createDocument(document: {
     type: string;
     file_size?: number;
     mime_type?: string;
-    cloudinary_url?: string;
-    cloudinary_public_id?: string;
 }) {
     const supabase = await createClient();
     const { data, error } = await supabase

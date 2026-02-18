@@ -105,8 +105,6 @@ export default function CreateIdentityPage() {
                     type: formData.documentType,
                     fileSize: formData.documentFile?.size || 0,
                     mimeType: formData.documentFile?.type || 'application/pdf',
-                    cloudinaryUrl: uploadResult?.url,
-                    cloudinaryPublicId: uploadResult?.publicId,
                 }),
             });
 

@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { userId, name, type, fileSize, mimeType, cloudinaryUrl, cloudinaryPublicId } = body;
+        const { userId, name, type, fileSize, mimeType } = body;
 
         if (!userId || !name || !type) {
             return NextResponse.json(
@@ -55,8 +55,6 @@ export async function POST(request: NextRequest) {
             type,
             file_size: fileSize,
             mime_type: mimeType,
-            cloudinary_url: cloudinaryUrl,
-            cloudinary_public_id: cloudinaryPublicId,
         });
 
         // Log activity

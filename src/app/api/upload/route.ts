@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { uploadToCloudinary } from '@/lib/cloudinary';
 
+/**
+ * File Upload Endpoint - Simplified for Demo
+ * 
+ * NOTE: This is a simplified implementation for hackathon demo.
+ * The file is validated but NOT actually uploaded to any storage.
+ * This reduces complexity and removes the need for Cloudinary setup.
+ * 
+ * In production, you would:
+ * - Upload to Vercel Blob, S3, or similar
+ * - Store the URL in the database
+ * - Use signed URLs for secure access
+ */
 export async function POST(request: NextRequest) {
     try {
         const formData = await request.formData();
@@ -31,25 +42,17 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Convert to buffer
-        const bytes = await file.arrayBuffer();
-        const buffer = Buffer.from(bytes);
-
-        // Upload to Cloudinary
-        const result = await uploadToCloudinary(buffer, 'trustlessid/documents');
-
-        if (!result.success) {
-            return NextResponse.json(
-                { success: false, error: result.error || 'Upload failed' },
-                { status: 500 }
-            );
-        }
+        // For demo purposes, we return a mock URL
+        // The file is NOT actually stored anywhere
+        // This is sufficient for the hackathon demo
+        const mockUrl = `/documents/${file.name}`;
+        const mockPublicId = `doc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
         return NextResponse.json({
             success: true,
             data: {
-                url: result.url,
-                publicId: result.publicId,
+                url: mockUrl,
+                publicId: mockPublicId,
                 size: file.size,
                 type: file.type,
                 name: file.name,
