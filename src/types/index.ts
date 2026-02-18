@@ -74,6 +74,8 @@ export interface Credential {
   expiresAt: string;
   status: 'active' | 'revoked' | 'expired';
   verificationCount: number;
+  ipfsHash?: string; // IPFS CID for decentralized storage
+  blockchainNetwork?: string; // Network where stored (ipfs, polygon, etc.)
 }
 
 // Public verification result (no PII)
