@@ -168,6 +168,7 @@ export default function CreateIdentityPage() {
                     body: JSON.stringify({
                         documentId: docId,
                         documentType: formData.documentType,
+                        userId: user?.id,
                     }),
                 });
                 const data = await response.json();
