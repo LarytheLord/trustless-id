@@ -1,6 +1,6 @@
 import { resolveMx } from 'node:dns/promises';
 
-const BLOCKED_EMAIL_DOMAINS = new Set([
+const BLOCKED_EMAIL_DOMAINS = [
     'example.com',
     'example.org',
     'example.net',
@@ -10,7 +10,7 @@ const BLOCKED_EMAIL_DOMAINS = new Set([
     '10minutemail.com',
     'guerrillamail.com',
     'yopmail.com',
-]);
+];
 
 export async function validateEmailDeliverability(email: string): Promise<{ valid: boolean; error?: string }> {
     const normalized = email.trim().toLowerCase();
@@ -27,7 +27,7 @@ export async function validateEmailDeliverability(email: string): Promise<{ vali
         return { valid: false, error: 'Please use a real email domain' };
     }
 
-    if (BLOCKED_EMAIL_DOMAINS.has(domain)) {
+    if (BLOCKED_EMAIL_DOMAINS.includes(domain)) {
         return { valid: false, error: 'Disposable or placeholder email domains are not allowed' };
     }
 
@@ -42,4 +42,3 @@ export async function validateEmailDeliverability(email: string): Promise<{ vali
 
     return { valid: true };
 }
-

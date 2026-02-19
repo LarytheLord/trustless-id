@@ -29,13 +29,15 @@ export async function POST(request: NextRequest) {
             recommendation: fraudData.recommendation,
         });
 
-        // Log activity
-        await createActivityLog({
-            user_id: userId || 'unknown',
-            action: 'verification',
-            description: `Fraud analysis completed: ${fraudData.riskLevel} risk (${fraudData.riskScore}/100)`,
-            metadata: { documentId, riskScore: fraudData.riskScore },
-        });
+        // Log activity only when userId is a valid UUID.
+        if (typeof userId === 'string' && isUUID(userId)) {
+            await createActivityLog({
+                user_id: userId,
+                action: 'verification',
+                description: `Fraud analysis completed: ${fraudData.riskLevel} risk (${fraudData.riskScore}/100)`,
+                metadata: { documentId, riskScore: fraudData.riskScore },
+            });
+        }
 
         return NextResponse.json({
             success: true,
@@ -48,4 +50,8 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         );
     }
+}
+
+function isUUID(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }

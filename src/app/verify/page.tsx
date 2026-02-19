@@ -26,9 +26,8 @@ export default function VerifyPage() {
 
         if (credentialIdFromUrl) {
             setCredentialId(credentialIdFromUrl);
-            setRecentCredentialIds(
-                Array.from(new Set(lastCredentialId ? [credentialIdFromUrl, lastCredentialId] : [credentialIdFromUrl]))
-            );
+            const ids = lastCredentialId ? [credentialIdFromUrl, lastCredentialId] : [credentialIdFromUrl];
+            setRecentCredentialIds(ids.filter((id, index) => ids.indexOf(id) === index));
             return;
         }
 

@@ -5,7 +5,7 @@ import { generateMockVerification } from '@/lib/mock-data';
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { documentId, documentType } = body;
+        const { documentId, documentType, userId } = body;
 
         if (!documentId) {
             return NextResponse.json(
@@ -33,13 +33,15 @@ export async function POST(request: NextRequest) {
         // Update document status
         await updateDocumentStatus(documentId, 'verified');
 
-        // Log activity
-        await createActivityLog({
-            user_id: 'unknown', // Will be set from context in real implementation
-            action: 'verification',
-            description: `Document ${documentId} verified with ${verificationData.authenticity}% authenticity`,
-            metadata: { documentId, authenticity: verificationData.authenticity },
-        });
+        // Log activity only when userId is a valid UUID
+        if (typeof userId === 'string' && isUUID(userId)) {
+            await createActivityLog({
+                user_id: userId,
+                action: 'verification',
+                description: `Document ${documentId} verified with ${verificationData.authenticity}% authenticity`,
+                metadata: { documentId, authenticity: verificationData.authenticity },
+            });
+        }
 
         return NextResponse.json({
             success: true,
@@ -52,4 +54,8 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         );
     }
+}
+
+function isUUID(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
