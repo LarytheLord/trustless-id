@@ -18,8 +18,22 @@ export default function VerifyPage() {
     const [recentCredentialIds, setRecentCredentialIds] = useState<string[]>([]);
 
     useEffect(() => {
+        const credentialIdFromUrl =
+            typeof window !== 'undefined'
+                ? new URLSearchParams(window.location.search).get('id')
+                : null;
         const lastCredentialId = localStorage.getItem('trustlessid_last_credential_id');
+
+        if (credentialIdFromUrl) {
+            setCredentialId(credentialIdFromUrl);
+            setRecentCredentialIds(
+                Array.from(new Set(lastCredentialId ? [credentialIdFromUrl, lastCredentialId] : [credentialIdFromUrl]))
+            );
+            return;
+        }
+
         if (lastCredentialId) {
+            setCredentialId(lastCredentialId);
             setRecentCredentialIds([lastCredentialId]);
         }
     }, []);

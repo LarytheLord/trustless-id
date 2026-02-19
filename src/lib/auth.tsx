@@ -10,7 +10,7 @@ interface AuthContextType {
     user: User | null;
     isLoading: boolean;
     isAuthenticated: boolean;
-    login: (email: string, name?: string) => Promise<boolean>;
+    login: (email: string, name?: string) => Promise<{ success: boolean; error?: string }>;
     logout: () => void;
 }
 
@@ -49,7 +49,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     // Login function
-    const login = async (email: string, name?: string): Promise<boolean> => {
+    const login = async (
+        email: string,
+        name?: string
+    ): Promise<{ success: boolean; error?: string }> => {
         setIsLoading(true);
 
         try {
@@ -65,14 +68,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (data.success && data.user) {
                 setUser(data.user);
                 localStorage.setItem(SESSION_KEY, JSON.stringify(data.user));
-                return true;
+                return { success: true };
             }
 
             console.error('Login failed:', data.error);
-            return false;
+            return { success: false, error: data.error || 'Authentication failed' };
         } catch (error) {
             console.error('Login failed:', error);
-            return false;
+            return { success: false, error: 'Network error. Please try again.' };
         } finally {
             setIsLoading(false);
         }

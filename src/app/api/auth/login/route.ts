@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createUser, getUserByEmail } from '@/lib/db';
 import { signJWT } from '@/lib/jwt';
 import { loginSchema } from '@/lib/validators/auth';
+import { validateEmailDeliverability } from '@/lib/validators/email';
 
 export async function POST(request: NextRequest) {
     try {
@@ -17,13 +18,23 @@ export async function POST(request: NextRequest) {
         }
 
         const { email, name } = parsed.data;
+        const normalizedEmail = email.toLowerCase().trim();
+
+        // Validate that the email domain is actually deliverable.
+        const emailValidation = await validateEmailDeliverability(normalizedEmail);
+        if (!emailValidation.valid) {
+            return NextResponse.json(
+                { success: false, error: emailValidation.error || 'Invalid email' },
+                { status: 400 }
+            );
+        }
 
         // Check if user exists
-        let user = await getUserByEmail(email);
+        let user = await getUserByEmail(normalizedEmail);
 
         if (!user) {
             // Create new user
-            user = await createUser(email, name || email.split('@')[0]);
+            user = await createUser(normalizedEmail, name || normalizedEmail.split('@')[0]);
         }
 
         // Generate JWT token

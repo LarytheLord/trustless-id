@@ -36,11 +36,11 @@ function LoginForm() {
             return;
         }
 
-        const success = await login(email, activeTab === 'signup' ? name : undefined);
-        if (success) {
+        const result = await login(email, activeTab === 'signup' ? name : undefined);
+        if (result.success) {
             router.push('/dashboard');
         } else {
-            setError('Authentication failed. Please try again.');
+            setError(result.error || 'Authentication failed. Please try again.');
         }
     };
 
@@ -159,7 +159,7 @@ function LoginForm() {
                     {/* Demo hint */}
                     <div className="mt-6 p-4 rounded-lg bg-primary/5 border border-primary/10">
                         <p className="text-xs text-muted-foreground text-center">
-                            <strong>Demo Mode:</strong> Use <code className="px-1 py-0.5 rounded bg-background/50">demo@trustlessid.com</code> for a pre-populated account, or any email to create a new one.
+                            <strong>Demo Mode:</strong> Use <code className="px-1 py-0.5 rounded bg-background/50">demo@trustlessid.com</code> for a pre-populated account, or any valid deliverable email domain to create a new one.
                         </p>
                     </div>
                 </CardContent>
