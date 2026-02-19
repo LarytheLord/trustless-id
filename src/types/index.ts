@@ -69,6 +69,7 @@ export interface Credential {
   id: string;
   userId: string;
   hash: string; // SHA-256 hash
+  sourceDocumentHash?: string; // SHA-256 fingerprint of the uploaded government ID artifact
   type: 'identity' | 'address' | 'age';
   issuedAt: string;
   expiresAt: string;

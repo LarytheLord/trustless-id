@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,14 @@ export default function VerifyPage() {
     const [isVerifying, setIsVerifying] = useState(false);
     const [result, setResult] = useState<PublicVerification | null>(null);
     const [error, setError] = useState('');
+    const [recentCredentialIds, setRecentCredentialIds] = useState<string[]>([]);
+
+    useEffect(() => {
+        const lastCredentialId = localStorage.getItem('trustlessid_last_credential_id');
+        if (lastCredentialId) {
+            setRecentCredentialIds([lastCredentialId]);
+        }
+    }, []);
 
     const handleVerify = async () => {
         if (!credentialId.trim()) {
@@ -35,7 +43,7 @@ export default function VerifyPage() {
             } else {
                 setError(data.error || 'Credential not found');
             }
-        } catch (err) {
+        } catch {
             setError('Verification failed. Please try again.');
         } finally {
             setIsVerifying(false);
@@ -89,7 +97,7 @@ export default function VerifyPage() {
                                     <div className="flex gap-3">
                                         <Input
                                             id="credential-id"
-                                            placeholder="e.g., cred_a1b2c3d4e5f6"
+                                            placeholder="e.g., 550e8400-e29b-41d4-a716-446655440000"
                                             value={credentialId}
                                             onChange={(e) => setCredentialId(e.target.value)}
                                             className="bg-background/50 font-mono"
@@ -117,22 +125,28 @@ export default function VerifyPage() {
                                     </div>
                                 )}
 
-                                {/* Demo credentials hint */}
+                                {/* Most recent credential hint */}
                                 <div className="p-4 rounded-lg bg-primary/5 border border-primary/10">
                                     <p className="text-xs text-muted-foreground">
-                                        <strong>Demo:</strong> Try these credential IDs:
+                                        <strong>Tip:</strong> Verify the credential you most recently issued.
                                     </p>
-                                    <div className="flex flex-wrap gap-2 mt-2">
-                                        {['cred_a1b2c3d4e5f6', 'cred_g7h8i9j0k1l2', 'cred_m3n4o5p6q7r8'].map((id) => (
-                                            <button
-                                                key={id}
-                                                onClick={() => setCredentialId(id)}
-                                                className="px-2 py-1 rounded bg-background/50 text-xs font-mono hover:bg-background/80 transition-colors"
-                                            >
-                                                {id}
-                                            </button>
-                                        ))}
-                                    </div>
+                                    {recentCredentialIds.length > 0 ? (
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                            {recentCredentialIds.map((id) => (
+                                                <button
+                                                    key={id}
+                                                    onClick={() => setCredentialId(id)}
+                                                    className="px-2 py-1 rounded bg-background/50 text-xs font-mono hover:bg-background/80 transition-colors"
+                                                >
+                                                    {id}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground mt-2">
+                                            No recent credential found in this browser. Issue one from Create Identity.
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </CardContent>

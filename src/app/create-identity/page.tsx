@@ -43,6 +43,7 @@ export default function CreateIdentityPage() {
     const [credential, setCredential] = useState<Credential | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [documentId, setDocumentId] = useState<string | null>(null);
+    const [sourceDocumentHash, setSourceDocumentHash] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
 
     // Redirect if not authenticated
@@ -63,7 +64,7 @@ export default function CreateIdentityPage() {
         }
     }, [user]);
 
-    const uploadFile = async (): Promise<{ url: string; publicId: string } | null> => {
+    const uploadFile = async (): Promise<{ url: string; publicId: string; documentHash: string } | null> => {
         if (!formData.documentFile) return null;
 
         setIsUploading(true);
@@ -78,7 +79,12 @@ export default function CreateIdentityPage() {
 
             const data = await response.json();
             if (data.success) {
-                return { url: data.data.url, publicId: data.data.publicId };
+                setSourceDocumentHash(data.data.documentHash);
+                return {
+                    url: data.data.url,
+                    publicId: data.data.publicId,
+                    documentHash: data.data.documentHash,
+                };
             } else {
                 toast.error('File upload failed');
                 return null;
@@ -92,7 +98,7 @@ export default function CreateIdentityPage() {
         }
     };
 
-    const createDocumentRecord = async (uploadResult?: { url: string; publicId: string } | null) => {
+    const createDocumentRecord = async () => {
         if (!user) return null;
 
         try {
@@ -105,8 +111,6 @@ export default function CreateIdentityPage() {
                     type: formData.documentType,
                     fileSize: formData.documentFile?.size || 0,
                     mimeType: formData.documentFile?.type || 'application/pdf',
-                    cloudinaryUrl: uploadResult?.url,
-                    cloudinaryPublicId: uploadResult?.publicId,
                 }),
             });
 
@@ -141,7 +145,10 @@ export default function CreateIdentityPage() {
 
             // Upload file and create document record
             const uploadResult = await uploadFile();
-            const docId = await createDocumentRecord(uploadResult);
+            if (!uploadResult) {
+                return;
+            }
+            const docId = await createDocumentRecord();
 
             if (!docId) {
                 toast.error('Failed to upload document');
@@ -207,6 +214,11 @@ export default function CreateIdentityPage() {
             }
             setIsProcessing(false);
         } else if (currentStep === 4) {
+            if (!sourceDocumentHash) {
+                toast.error('Missing document fingerprint. Please re-upload your government ID.');
+                return;
+            }
+
             // Issue credential
             setCurrentStep(5);
             setIsProcessing(true);
@@ -219,11 +231,13 @@ export default function CreateIdentityPage() {
                         userId: user?.id,
                         documentId: documentId,
                         type: 'identity',
+                        evidenceHash: sourceDocumentHash,
                     }),
                 });
                 const data = await response.json();
                 if (data.success) {
                     setCredential(data.data);
+                    localStorage.setItem('trustlessid_last_credential_id', data.data.id);
                     toast.success('Credential issued successfully!');
                 } else {
                     toast.error('Failed to issue credential');
@@ -557,6 +571,14 @@ export default function CreateIdentityPage() {
                                                     <p className="text-xs text-muted-foreground">Blockchain Hash</p>
                                                     <p className="font-mono text-sm text-primary mt-1">{formatHash(credential.hash)}</p>
                                                 </div>
+                                                {(credential.sourceDocumentHash || sourceDocumentHash) && (
+                                                    <div>
+                                                        <p className="text-xs text-muted-foreground">Government ID Fingerprint</p>
+                                                        <p className="font-mono text-sm mt-1">
+                                                            {formatHash(credential.sourceDocumentHash || sourceDocumentHash || '')}
+                                                        </p>
+                                                    </div>
+                                                )}
                                                 {credential.ipfsHash && (
                                                     <div>
                                                         <p className="text-xs text-muted-foreground flex items-center gap-1">
