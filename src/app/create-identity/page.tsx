@@ -614,7 +614,13 @@ export default function CreateIdentityPage() {
                                                         View Dashboard
                                                     </Button>
                                                 </Link>
-                                                <Link href="/verify">
+                                                <Link
+                                                    href={
+                                                        credential?.id
+                                                            ? `/verify?id=${encodeURIComponent(credential.id)}`
+                                                            : '/verify'
+                                                    }
+                                                >
                                                     <Button className="gradient-primary text-white border-0">
                                                         Verify Credential
                                                     </Button>
