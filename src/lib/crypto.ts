@@ -24,10 +24,12 @@ export async function generateCredentialHash(data: {
     userId: string;
     documentId: string;
     timestamp: string;
+    evidenceHash?: string;
     salt?: string;
 }): Promise<string> {
     const salt = data.salt || crypto.randomUUID();
-    const payload = `${data.userId}:${data.documentId}:${data.timestamp}:${salt}`;
+    const evidenceSegment = data.evidenceHash || 'no-evidence';
+    const payload = `${data.userId}:${data.documentId}:${data.timestamp}:${evidenceSegment}:${salt}`;
     const hash = await generateSHA256(payload);
     return `sha256:${hash}`;
 }

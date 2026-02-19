@@ -15,6 +15,7 @@ export async function storeCredentialOnIPFS(credentialData: {
     type: string;
     issuedAt: string;
     expiresAt: string;
+    sourceDocumentHash?: string;
 }) {
     try {
         // Upload to IPFS

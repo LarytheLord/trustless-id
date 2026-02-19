@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 
 /**
  * File Upload Endpoint - Simplified for Demo
@@ -42,9 +43,12 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // For demo purposes, we return a mock URL
-        // The file is NOT actually stored anywhere
-        // This is sufficient for the hackathon demo
+        // Generate a cryptographic fingerprint from the actual uploaded file bytes.
+        // This lets us prove the credential issuance was derived from a real document artifact.
+        const fileBuffer = Buffer.from(await file.arrayBuffer());
+        const documentHash = `sha256:${createHash('sha256').update(fileBuffer).digest('hex')}`;
+
+        // For demo purposes, we still return a mock URL (no persistent file storage).
         const mockUrl = `/documents/${file.name}`;
         const mockPublicId = `doc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
@@ -53,6 +57,7 @@ export async function POST(request: NextRequest) {
             data: {
                 url: mockUrl,
                 publicId: mockPublicId,
+                documentHash,
                 size: file.size,
                 type: file.type,
                 name: file.name,

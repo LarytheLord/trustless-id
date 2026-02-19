@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCredentialsByUserId, getCredentialById, createCredential, createActivityLog } from '@/lib/db';
-import { generateCredentialId, generateCredentialHash } from '@/lib/crypto';
+import { getCredentialsByUserId, createCredential, createActivityLog } from '@/lib/db';
+import { generateCredentialHash } from '@/lib/crypto';
 import { storeCredentialOnIPFS } from '@/lib/ipfs';
 
 export async function GET(request: NextRequest) {
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { userId, documentId, type } = body;
+        const { userId, documentId, type, evidenceHash } = body;
 
         if (!userId || !type) {
             return NextResponse.json(
@@ -53,12 +53,19 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Generate credential ID and hash
-        const credentialId = generateCredentialId();
+        if (evidenceHash && !/^sha256:[a-f0-9]{64}$/.test(evidenceHash)) {
+            return NextResponse.json(
+                { success: false, error: 'Invalid evidence hash format' },
+                { status: 400 }
+            );
+        }
+
+        // Generate credential hash
         const hash = await generateCredentialHash({
             userId,
             documentId: documentId || 'none',
             timestamp: new Date().toISOString(),
+            evidenceHash,
         });
 
         // Calculate expiry (1 year from now)
@@ -81,6 +88,7 @@ export async function POST(request: NextRequest) {
             type: credential.type,
             issuedAt: credential.issued_at,
             expiresAt: credential.expires_at,
+            sourceDocumentHash: evidenceHash,
         });
 
         // Update credential with IPFS hash if successful
@@ -100,15 +108,17 @@ export async function POST(request: NextRequest) {
             metadata: { 
                 credentialId: credential.id,
                 ipfsHash: ipfsResult.success ? ipfsResult.ipfsHash : null,
+                sourceDocumentHash: evidenceHash || null,
             },
         });
 
         return NextResponse.json({
             success: true,
             data: {
-                id: credentialId,
+                id: credential.id,
                 userId: credential.user_id,
                 hash: credential.hash,
+                sourceDocumentHash: evidenceHash,
                 type: credential.type,
                 issuedAt: credential.issued_at,
                 expiresAt: credential.expires_at,
