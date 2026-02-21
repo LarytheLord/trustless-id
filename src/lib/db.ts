@@ -287,3 +287,105 @@ export async function createFraudResult(result: {
     if (error) throw error;
     return data;
 }
+
+// ============================================
+// CONSENT-BOUND VERIFICATION REQUESTS
+// ============================================
+
+export async function createVerificationRequest(request: {
+    credential_id: string;
+    verifier_name: string;
+    verifier_domain: string;
+    purpose: string;
+    policy?: Record<string, unknown>;
+    requested_fields?: string[];
+    nonce: string;
+    expires_at: string;
+}) {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from('verification_requests')
+        .insert({
+            ...request,
+            policy: request.policy || {},
+            requested_fields: request.requested_fields || [],
+            status: 'pending',
+        })
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+export async function getVerificationRequestById(id: string) {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from('verification_requests')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+    if (error) return null;
+    return data;
+}
+
+export async function updateVerificationRequest(
+    id: string,
+    updates: Partial<{
+        status: 'pending' | 'approved' | 'rejected' | 'consumed' | 'expired';
+        approved_at: string;
+        consumed_at: string;
+    }>
+) {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from('verification_requests')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+export async function markVerificationRequestConsumed(id: string, consumedAt: string) {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from('verification_requests')
+        .update({ status: 'consumed', consumed_at: consumedAt })
+        .eq('id', id)
+        .eq('status', 'approved')
+        .is('consumed_at', null)
+        .select()
+        .single();
+
+    if (error) return null;
+    return data;
+}
+
+export async function createVerificationReceipt(receipt: {
+    verification_request_id: string;
+    credential_id: string;
+    verifier_name: string;
+    verifier_domain: string;
+    purpose: string;
+    decision: 'pass' | 'fail';
+    disclosed_data?: Record<string, unknown>;
+    trust_score?: number;
+    receipt_hash?: string;
+}) {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+        .from('verification_receipts')
+        .insert({
+            ...receipt,
+            disclosed_data: receipt.disclosed_data || {},
+        })
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}

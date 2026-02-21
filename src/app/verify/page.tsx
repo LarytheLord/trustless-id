@@ -10,12 +10,47 @@ import { Progress } from '@/components/ui/progress';
 import { Navbar, Footer } from '@/components/shared';
 import { PublicVerification } from '@/types';
 
+interface PolicyCheck {
+    name: string;
+    passed: boolean;
+    detail: string;
+}
+
+interface TrustBreakdown {
+    base: number;
+    verificationPoints: number;
+    agePoints: number;
+    expiredPenalty: number;
+    finalScore: number;
+}
+
+interface ExplainabilityData {
+    policyChecks: PolicyCheck[];
+    trustBreakdown: TrustBreakdown;
+    summary: string;
+}
+
 export default function VerifyPage() {
     const [credentialId, setCredentialId] = useState('');
     const [isVerifying, setIsVerifying] = useState(false);
     const [result, setResult] = useState<PublicVerification | null>(null);
     const [error, setError] = useState('');
     const [recentCredentialIds, setRecentCredentialIds] = useState<string[]>([]);
+    const [verifierName, setVerifierName] = useState('Demo Bank');
+    const [verifierDomain, setVerifierDomain] = useState('bank.example.com');
+    const [purpose, setPurpose] = useState('KYC onboarding');
+    const [requestId, setRequestId] = useState('');
+    const [proofToken, setProofToken] = useState('');
+    const [receiptHash, setReceiptHash] = useState('');
+    const [flowStatus, setFlowStatus] = useState('');
+    const [replayStatus, setReplayStatus] = useState('');
+    const [explainability, setExplainability] = useState<ExplainabilityData | null>(null);
+    const [timeline, setTimeline] = useState({
+        requested: false,
+        approved: false,
+        consumed: false,
+        replayBlocked: false,
+    });
 
     useEffect(() => {
         const credentialIdFromUrl =
@@ -60,6 +95,171 @@ export default function VerifyPage() {
             setError('Verification failed. Please try again.');
         } finally {
             setIsVerifying(false);
+        }
+    };
+
+    const handleCreateVerificationRequest = async () => {
+        if (!credentialId.trim()) {
+            setError('Please enter a credential ID');
+            return;
+        }
+
+        setError('');
+        setFlowStatus('Creating request...');
+        setReplayStatus('');
+        setExplainability(null);
+        setProofToken('');
+        setReceiptHash('');
+        setTimeline({
+            requested: false,
+            approved: false,
+            consumed: false,
+            replayBlocked: false,
+        });
+
+        try {
+            const response = await fetch('/api/verify/request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    credentialId: credentialId.trim(),
+                    verifierName,
+                    verifierDomain,
+                    purpose,
+                    policy: {
+                        requiresActiveCredential: true,
+                        maxRiskScore: 30,
+                    },
+                    requestedFields: ['credentialType', 'issueDate', 'isValid'],
+                }),
+            });
+
+            const data = await response.json();
+            if (!data.success) {
+                setError(data.error || 'Failed to create verification request');
+                setFlowStatus('');
+                return;
+            }
+
+            setRequestId(data.data.requestId);
+            setFlowStatus(`Request created: ${data.data.requestId}`);
+            setTimeline((prev) => ({ ...prev, requested: true }));
+        } catch {
+            setError('Failed to create verification request');
+            setFlowStatus('');
+        }
+    };
+
+    const handleApproveRequest = async () => {
+        if (!requestId) {
+            setError('Create a verification request first');
+            return;
+        }
+
+        setError('');
+        setFlowStatus('Approving request...');
+
+        try {
+            const response = await fetch('/api/verify/approve', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    requestId,
+                    decision: 'approve',
+                }),
+            });
+
+            const data = await response.json();
+            if (!data.success) {
+                setError(data.error || 'Failed to approve request');
+                setFlowStatus('');
+                return;
+            }
+
+            setProofToken(data.data.proofToken);
+            setFlowStatus('Request approved. One-time proof token generated.');
+            setTimeline((prev) => ({ ...prev, approved: true }));
+        } catch {
+            setError('Failed to approve request');
+            setFlowStatus('');
+        }
+    };
+
+    const handleConsumeProof = async () => {
+        if (!proofToken) {
+            setError('Approve request first to get a proof token');
+            return;
+        }
+
+        setError('');
+        setFlowStatus('Consuming one-time proof...');
+
+        try {
+            const response = await fetch('/api/verify/consume', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    proofToken,
+                    verifierName,
+                    verifierDomain,
+                }),
+            });
+
+            const data = await response.json();
+            if (!data.success) {
+                setError(data.error || 'Failed to consume proof');
+                setFlowStatus('');
+                return;
+            }
+
+            setResult({
+                credentialId: data.data.credentialId,
+                isValid: data.data.isValid,
+                trustScore: data.data.trustScore,
+                issueDate: data.data.issueDate,
+                credentialType: data.data.credentialType,
+                verifiedAt: data.data.verifiedAt,
+            });
+            setReceiptHash(data.data.receiptHash || '');
+            setExplainability(data.data.explainability || null);
+            setFlowStatus('Proof consumed successfully. Replay is blocked.');
+            setTimeline((prev) => ({ ...prev, consumed: true }));
+        } catch {
+            setError('Failed to consume proof');
+            setFlowStatus('');
+        }
+    };
+
+    const handleReplayAttackSimulation = async () => {
+        if (!proofToken) {
+            setReplayStatus('No proof token available to replay.');
+            return;
+        }
+
+        setReplayStatus('Attempting replay attack using same proof token...');
+
+        try {
+            const response = await fetch('/api/verify/consume', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    proofToken,
+                    verifierName,
+                    verifierDomain,
+                }),
+            });
+
+            const data = await response.json();
+            if (!data.success) {
+                setReplayStatus(`Replay blocked: ${data.error}`);
+                setTimeline((prev) => ({ ...prev, replayBlocked: true }));
+                return;
+            }
+
+            setReplayStatus('Replay unexpectedly succeeded (check backend constraints).');
+        } catch {
+            setReplayStatus('Replay blocked by server/network protection.');
+            setTimeline((prev) => ({ ...prev, replayBlocked: true }));
         }
     };
 
@@ -165,6 +365,118 @@ export default function VerifyPage() {
                         </CardContent>
                     </Card>
 
+                    <Card className="glass border-white/5 mb-6">
+                            <CardHeader>
+                            <CardTitle>Consent-Bound One-Time Verification</CardTitle>
+                            <CardDescription>
+                                Out-of-box flow: request {'->'} holder approval {'->'} single-use proof (anti-copy/replay)
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="verifier-name">Verifier Name</Label>
+                                        <Input
+                                            id="verifier-name"
+                                            value={verifierName}
+                                            onChange={(e) => setVerifierName(e.target.value)}
+                                            className="bg-background/50"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="verifier-domain">Verifier Domain</Label>
+                                        <Input
+                                            id="verifier-domain"
+                                            value={verifierDomain}
+                                            onChange={(e) => setVerifierDomain(e.target.value)}
+                                            className="bg-background/50"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="purpose">Purpose</Label>
+                                        <Input
+                                            id="purpose"
+                                            value={purpose}
+                                            onChange={(e) => setPurpose(e.target.value)}
+                                            className="bg-background/50"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap gap-3">
+                                    <Button variant="outline" onClick={handleCreateVerificationRequest}>
+                                        1. Create Request
+                                    </Button>
+                                    <Button variant="outline" onClick={handleApproveRequest} disabled={!requestId}>
+                                        2. Approve Request
+                                    </Button>
+                                    <Button className="gradient-primary text-white border-0" onClick={handleConsumeProof} disabled={!proofToken}>
+                                        3. Consume One-Time Proof
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleReplayAttackSimulation}
+                                        disabled={!timeline.consumed}
+                                    >
+                                        Simulate Replay Attack
+                                    </Button>
+                                </div>
+
+                                {flowStatus && (
+                                    <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                                        <p className="text-sm text-green-400">{flowStatus}</p>
+                                    </div>
+                                )}
+
+                                {replayStatus && (
+                                    <div className={`p-3 rounded-lg border ${
+                                        replayStatus.toLowerCase().includes('blocked')
+                                            ? 'bg-green-500/10 border-green-500/20'
+                                            : 'bg-yellow-500/10 border-yellow-500/20'
+                                    }`}>
+                                        <p className="text-sm">{replayStatus}</p>
+                                    </div>
+                                )}
+
+                                <div className="p-3 rounded-lg bg-background/50">
+                                    <p className="text-xs text-muted-foreground mb-2">Consent Timeline</p>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Badge className={timeline.requested ? 'bg-green-500/10 text-green-400' : 'bg-muted text-muted-foreground'}>
+                                            1. Request Created
+                                        </Badge>
+                                        <span className="text-muted-foreground">{'->'}</span>
+                                        <Badge className={timeline.approved ? 'bg-green-500/10 text-green-400' : 'bg-muted text-muted-foreground'}>
+                                            2. Holder Approved
+                                        </Badge>
+                                        <span className="text-muted-foreground">{'->'}</span>
+                                        <Badge className={timeline.consumed ? 'bg-green-500/10 text-green-400' : 'bg-muted text-muted-foreground'}>
+                                            3. Proof Consumed
+                                        </Badge>
+                                        <span className="text-muted-foreground">{'->'}</span>
+                                        <Badge className={timeline.replayBlocked ? 'bg-green-500/10 text-green-400' : 'bg-muted text-muted-foreground'}>
+                                            4. Replay Blocked
+                                        </Badge>
+                                    </div>
+                                </div>
+
+                                {requestId && (
+                                    <div className="p-3 rounded-lg bg-background/50">
+                                        <p className="text-xs text-muted-foreground">Request ID</p>
+                                        <p className="font-mono text-sm">{requestId}</p>
+                                    </div>
+                                )}
+
+                                {receiptHash && (
+                                    <div className="p-3 rounded-lg bg-background/50">
+                                        <p className="text-xs text-muted-foreground">Verification Receipt Hash</p>
+                                        <p className="font-mono text-sm text-primary">{receiptHash}</p>
+                                    </div>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+
                     {/* Verification Result */}
                     {result && (
                         <Card className={`border-2 ${result.isValid ? 'border-green-500/30 bg-green-500/5' : 'border-red-500/30 bg-red-500/5'}`}>
@@ -223,6 +535,39 @@ export default function VerifyPage() {
                                                 <p>{new Date(result.verifiedAt).toLocaleString()}</p>
                                             </div>
                                         </div>
+
+                                        {explainability && (
+                                            <div className="mt-6 p-4 rounded-lg bg-background/50 border border-white/10 space-y-3">
+                                                <p className="font-medium text-sm">Why This Decision Was Made</p>
+                                                <p className="text-xs text-muted-foreground">{explainability.summary}</p>
+
+                                                <div className="space-y-2">
+                                                    {explainability.policyChecks.map((check, index) => (
+                                                        <div key={index} className="flex items-start justify-between gap-3 text-xs">
+                                                            <div>
+                                                                <p className="font-medium">{check.name}</p>
+                                                                <p className="text-muted-foreground">{check.detail}</p>
+                                                            </div>
+                                                            <Badge className={check.passed ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}>
+                                                                {check.passed ? 'PASS' : 'FAIL'}
+                                                            </Badge>
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                <div className="pt-2 border-t border-white/10 text-xs text-muted-foreground">
+                                                    Trust score breakdown: base {explainability.trustBreakdown.base}
+                                                    {' + '}
+                                                    verifications {explainability.trustBreakdown.verificationPoints}
+                                                    {' + '}
+                                                    age {explainability.trustBreakdown.agePoints}
+                                                    {' - '}
+                                                    expired penalty {explainability.trustBreakdown.expiredPenalty}
+                                                    {' = '}
+                                                    {explainability.trustBreakdown.finalScore}
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {/* Privacy Notice */}
                                         <div className="mt-6 p-4 rounded-lg bg-primary/5 border border-primary/10">

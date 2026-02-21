@@ -31,8 +31,9 @@ export async function POST(request: NextRequest) {
 
         // Check if user exists
         let user = await getUserByEmail(normalizedEmail);
+        const isNewUser = !user;
 
-        if (!user) {
+        if (isNewUser) {
             // Create new user
             user = await createUser(normalizedEmail, name || normalizedEmail.split('@')[0]);
         }
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
                 verified: user.verified,
                 createdAt: user.created_at,
             },
-            message: user.created_at ? 'Account created' : 'Login successful',
+            message: isNewUser ? 'Account created' : 'Login successful',
         });
 
         // Set JWT cookie

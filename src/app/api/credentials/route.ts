@@ -130,6 +130,21 @@ export async function POST(request: NextRequest) {
         });
     } catch (error) {
         console.error('Error creating credential:', error);
+
+        const maybeDbError = error as { code?: string; message?: string } | null;
+        if (
+            maybeDbError?.code === '23503' &&
+            maybeDbError?.message?.includes('credentials_user_id_fkey')
+        ) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: 'Database foreign key mismatch: run migration 003_fix_credentials_user_fk_to_users.sql before issuing credentials.',
+                },
+                { status: 500 }
+            );
+        }
+
         return NextResponse.json(
             { success: false, error: 'Failed to create credential' },
             { status: 500 }
