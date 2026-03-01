@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createVerificationResult, updateDocumentStatus, createActivityLog } from '@/lib/db';
-import { generateMockVerification } from '@/lib/mock-data';
+import { VerificationResult } from '@/types';
 
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { documentId, documentType, userId } = body;
+        const { documentId, userId, ocr } = body;
 
         if (!documentId) {
             return NextResponse.json(
@@ -14,12 +14,11 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Simulate AI processing delay
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        // Generate mock verification result (replace with real AI API later)
-        const verificationData = generateMockVerification();
-        verificationData.documentId = documentId;
+        // OCR-driven analysis output
+        const verificationData = buildVerificationFromOCR({
+            documentId,
+            ocr,
+        });
 
         // Save to database
         await createVerificationResult({
@@ -58,4 +57,80 @@ export async function POST(request: NextRequest) {
 
 function isUUID(value: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function buildVerificationFromOCR(params: {
+    documentId: string;
+    ocr?: {
+        attempted?: boolean;
+        confidence?: number;
+        textSample?: string;
+        wordCount?: number;
+        reason?: string;
+    };
+}): VerificationResult {
+    const { documentId, ocr } = params;
+    const confidenceRaw = typeof ocr?.confidence === 'number' ? ocr.confidence : 0;
+    const confidence = Math.max(0, Math.min(100, Math.round(confidenceRaw)));
+    const textSample = (ocr?.textSample || '').trim();
+    const wordCount = typeof ocr?.wordCount === 'number' ? ocr.wordCount : (textSample ? textSample.split(/\s+/).length : 0);
+    const attempted = !!ocr?.attempted;
+
+    let authenticity = 45;
+    if (attempted) {
+        authenticity = Math.max(55, Math.min(99, Math.round(confidence * 0.85 + Math.min(wordCount, 60) * 0.25)));
+    }
+
+    const anomalies: VerificationResult['anomalies'] = [];
+    if (!attempted) {
+        anomalies.push({
+            type: 'quality',
+            severity: 'medium',
+            description: ocr?.reason || 'OCR was not run for this file type',
+        });
+    }
+    if (attempted && confidence < 65) {
+        anomalies.push({
+            type: 'quality',
+            severity: 'medium',
+            description: `Low OCR confidence (${confidence}%)`,
+        });
+    }
+    if (attempted && wordCount < 8) {
+        anomalies.push({
+            type: 'format',
+            severity: 'low',
+            description: 'Limited readable text extracted from document',
+        });
+    }
+
+    return {
+        documentId,
+        authenticity,
+        confidence: attempted ? confidence : 0,
+        anomalies,
+        extractedData: extractDocumentFields(textSample),
+        processedAt: new Date().toISOString(),
+    };
+}
+
+function extractDocumentFields(text: string) {
+    const upper = text.toUpperCase();
+    const docNumber = upper.match(/\b[A-Z0-9]{6,12}\b/)?.[0];
+    const dob = text.match(/\b(\d{2}[\/\-]\d{2}[\/\-]\d{4}|\d{4}[\/\-]\d{2}[\/\-]\d{2})\b/)?.[0];
+    const expiry = text.match(/\b(?:EXP|EXPIRES|VALID\s*TILL)\s*[:\-]?\s*(\d{2}[\/\-]\d{2}[\/\-]\d{4}|\d{4}[\/\-]\d{2}[\/\-]\d{2})/i)?.[1];
+    const country = ['INDIA', 'UNITED STATES', 'USA', 'CANADA', 'UAE', 'UK'].find((c) => upper.includes(c));
+    const nameLine = text
+        .split('\n')
+        .map((line) => line.trim())
+        .find((line) => /^[A-Za-z][A-Za-z\s]{4,}$/.test(line) && !/PASSPORT|LICENSE|NATIONAL|IDENTITY|REPUBLIC/i.test(line));
+
+    return {
+        fullName: nameLine || undefined,
+        dateOfBirth: dob || undefined,
+        documentNumber: docNumber || undefined,
+        expiryDate: expiry || undefined,
+        issuingCountry: country || undefined,
+        address: undefined,
+    };
 }

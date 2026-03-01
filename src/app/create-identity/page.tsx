@@ -44,6 +44,13 @@ export default function CreateIdentityPage() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [documentId, setDocumentId] = useState<string | null>(null);
     const [sourceDocumentHash, setSourceDocumentHash] = useState<string | null>(null);
+    const [ocrResult, setOcrResult] = useState<{
+        attempted: boolean;
+        confidence?: number;
+        textSample?: string;
+        wordCount?: number;
+        reason?: string;
+    } | null>(null);
     const [isUploading, setIsUploading] = useState(false);
 
     // Redirect if not authenticated
@@ -64,7 +71,13 @@ export default function CreateIdentityPage() {
         }
     }, [user]);
 
-    const uploadFile = async (): Promise<{ url: string; publicId: string; documentHash: string } | null> => {
+    const uploadFile = async (): Promise<{ url: string; publicId: string; documentHash: string; ocr?: {
+        attempted: boolean;
+        confidence?: number;
+        textSample?: string;
+        wordCount?: number;
+        reason?: string;
+    } } | null> => {
         if (!formData.documentFile) return null;
 
         setIsUploading(true);
@@ -80,10 +93,12 @@ export default function CreateIdentityPage() {
             const data = await response.json();
             if (data.success) {
                 setSourceDocumentHash(data.data.documentHash);
+                setOcrResult(data.data.ocr || null);
                 return {
                     url: data.data.url,
                     publicId: data.data.publicId,
                     documentHash: data.data.documentHash,
+                    ocr: data.data.ocr,
                 };
             } else {
                 toast.error('File upload failed');
@@ -169,6 +184,7 @@ export default function CreateIdentityPage() {
                         documentId: docId,
                         documentType: formData.documentType,
                         userId: user?.id,
+                        ocr: uploadResult.ocr || ocrResult,
                     }),
                 });
                 const data = await response.json();

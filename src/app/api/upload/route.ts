@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'crypto';
+import { createRequire } from 'module';
+import { existsSync } from 'fs';
+import path from 'path';
+import { createWorker } from 'tesseract.js';
 
 /**
  * File Upload Endpoint - Simplified for Demo
@@ -48,6 +52,9 @@ export async function POST(request: NextRequest) {
         const fileBuffer = Buffer.from(await file.arrayBuffer());
         const documentHash = `sha256:${createHash('sha256').update(fileBuffer).digest('hex')}`;
 
+        // Run OCR only for images. PDFs are accepted but OCR is skipped in this MVP.
+        const ocr = await runOCRIfImage(file.type, fileBuffer);
+
         // For demo purposes, we still return a mock URL (no persistent file storage).
         const mockUrl = `/documents/${file.name}`;
         const mockPublicId = `doc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -58,6 +65,7 @@ export async function POST(request: NextRequest) {
                 url: mockUrl,
                 publicId: mockPublicId,
                 documentHash,
+                ocr,
                 size: file.size,
                 type: file.type,
                 name: file.name,
@@ -70,4 +78,81 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         );
     }
+}
+
+async function runOCRIfImage(mimeType: string, fileBuffer: Buffer): Promise<{
+    attempted: boolean;
+    confidence?: number;
+    textSample?: string;
+    wordCount?: number;
+    reason?: string;
+}> {
+    if (!mimeType.startsWith('image/')) {
+        return {
+            attempted: false,
+            reason: 'OCR currently supported for image uploads only',
+        };
+    }
+
+    const workerPath = resolveTesseractWorkerPath();
+    const worker = await createWorker('eng', 1, workerPath ? { workerPath } : {});
+    try {
+        const {
+            data: { text, confidence },
+        } = await worker.recognize(fileBuffer);
+
+        const cleanedText = text.replace(/\s+/g, ' ').trim();
+        const words = cleanedText ? cleanedText.split(' ').length : 0;
+
+        return {
+            attempted: true,
+            confidence,
+            textSample: cleanedText.slice(0, 500),
+            wordCount: words,
+        };
+    } catch {
+        return {
+            attempted: false,
+            reason: 'OCR failed for this image',
+        };
+    } finally {
+        await worker.terminate();
+    }
+}
+
+function resolveTesseractWorkerPath(): string | null {
+    // Prefer direct absolute path from project root in Next.js dev/prod runtime.
+    const directPath = path.join(
+        process.cwd(),
+        'node_modules',
+        'tesseract.js',
+        'src',
+        'worker-script',
+        'node',
+        'index.js'
+    );
+    if (existsSync(directPath)) {
+        return directPath;
+    }
+
+    try {
+        const require = createRequire(import.meta.url);
+        const resolved = require.resolve('tesseract.js/src/worker-script/node/index.js');
+        return sanitizeWorkerPath(resolved);
+    } catch {
+        return null;
+    }
+}
+
+function sanitizeWorkerPath(inputPath: string): string | null {
+    // Turbopack can decorate paths like:
+    // [project]/node_modules/.../index.js [app-route] (ecmascript)
+    let p = inputPath.trim();
+    p = p.replace(/\s+\[app-route\].*$/i, '');
+    p = p.replace(/^\[project\]/, process.cwd());
+
+    if (!path.isAbsolute(p)) {
+        return null;
+    }
+    return p;
 }
